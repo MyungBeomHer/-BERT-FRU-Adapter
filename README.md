@@ -132,10 +132,6 @@ class KobertCRF(nn.Module):
 |**KoBERT+FRU-Adapter+CRF**|95.38M|**0.8703**||
 
 ### Reference Repo
-- [NLP implementation by aisolab](https://github.com/aisolab/nlp_implementation)
-- [pytorch-crf](https://github.com/kmkurn/pytorch-crf/blob/8f3203a1f1d7984c87718bfe31853242670258db/docs/index.rst)
 - [SKTBrain KoBERT](https://github.com/SKTBrain/KoBERT)
 - [Finetuning configuration from huggingface](https://github.com/huggingface/pytorch-transformers/blob/master/examples/run_multiple_choice.py)
-- [BERT Attention Visualization](https://github.com/jessevig/bertviz)
-
-- 
+- [SKTBrain KoBERT Error revise](https://github.com/SKTBrain/KoBERT/tree/master/kobert_hf)
