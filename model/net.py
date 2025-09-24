@@ -197,9 +197,6 @@ class KobertCRF(nn.Module):
         # head_mask = [None] * self.bert.config.num_hidden_layers
         
         for i, blk in enumerate(self.bert.encoder.layer):
-            # layer 출력 가져오기 (버전에 따라 tuple일 수 있음)
-            # hidden_states,token_type_ids,attention_mask = blk(hidden_states,token_type_ids,attention_mask) #+ self.tsea_blocks[i](hidden_states)
-            # hidden_states = blk(hidden_states)
             hidden_states = blk(hidden_states,attention_mask)#,head_mask[i])
             hidden_states = hidden_states[0] if isinstance(hidden_states, (tuple, list)) else hidden_states
             hidden_states = hidden_states + self.tsea_blocks[i](hidden_states)
