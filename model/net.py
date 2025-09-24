@@ -203,34 +203,13 @@ class KobertCRF(nn.Module):
             hidden_states = blk(hidden_states,attention_mask)#,head_mask[i])
             hidden_states = hidden_states[0] if isinstance(hidden_states, (tuple, list)) else hidden_states
             hidden_states = hidden_states + self.tsea_blocks[i](hidden_states)
-        # outputs = self.bert(input_ids=input_ids,
-        #                     token_type_ids=token_type_ids,
-        #                     attention_mask=attention_mask)
-
-        # input_ids += self.tsea_blocks(input_ids)
-
-        # outputs = self.bert(input_ids=input_ids,
-        #                     token_type_ids=token_type_ids,
-        #                     attention_mask=attention_mask)
-        # input_ids += self.tsea_blocks(input_ids)
-
-        # last_encoder_layer = outputs[0]
-        # last_encoder_layer = self.dropout(last_encoder_layer)
-        # emissions = self.position_wise_ff(last_encoder_layer)
-        # mask = input_ids.ne(self.pad_id)   # dtype=bool
-        # #----#
-        # max_len = input_ids.size(1)
-        # pad_val = self.pad_id  # = 1
-        # #----#
         
         last_encoder_layer = hidden_states #outputs[0]
         last_encoder_layer = self.dropout(last_encoder_layer)
         emissions = self.position_wise_ff(last_encoder_layer)
         mask = input_ids.ne(self.pad_id)   # dtype=bool
-        #----#
         max_len = input_ids.size(1)
         pad_val = self.pad_id  # = 1
-        #----#
 
         def _pad_paths(paths):
             # paths: List[List[int]] (batch 크기)
