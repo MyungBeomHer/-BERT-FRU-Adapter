@@ -1,4 +1,4 @@
-## Speaker Recognition
+## AI based korean Named Entity Recognizer
 
 팀원 : [허명범](https://github.com/MyungBeomHer)
 
