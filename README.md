@@ -8,7 +8,27 @@
 ### 프로젝트 언어 및 환경
 프로젝트 언어 : Pytorch
 
-### Run 
+### Dataset
+- [NER Dataset from 한국해양대학교 자연언어처리 연구실](https://github.com/kmounlp/NER)
+
+### NER tagset
+- 총 8개의 태그가 있음
+    - PER: 사람이름
+    - LOC: 지명
+    - ORG: 기관명
+    - POH: 기타
+    - DAT: 날짜
+    - TIM: 시간
+    - DUR: 기간
+    - MNY: 통화
+    - PNT: 비율
+    - NOH: 기타 수량표현
+- 개체의 범주 
+    - 개체이름: 사람이름(PER), 지명(LOC), 기관명(ORG), 기타(POH)
+    - 시간표현: 날짜(DAT), 시간(TIM), 기간 (DUR)
+    - 수량표현: 통화(MNY), 비율(PNT), 기타 수량표현(NOH)
+
+### train
 ```bash
 python train_bert_crf.py 
 ```
@@ -18,24 +38,24 @@ python train_bert_crf.py
   <img src="/figure/model.png" width=100%> <br>
 </p>
 
+- Benchmark (NER Dataset)
+
+|Model|Params|MacroAvg F1 score|
+|:------:|:------:|:---:|
+|KoBERT|92.21M|0.8554|
+|KoBERT+BiLSTM+CRF|95.75M|0.8659||
+|**KoBERT+FRU-Adapter+CRF**|95.38M|**0.8703**||
+
+### Requirements
+```bash
+pip install -r requirements.txt
 ```
-     
-```
-[Speaker_Recognition.ipynb](Speaker_Recognition.ipynb)
 
-## Result
-### Overall Accuracy 
-<p align="center">
-  <img src="/figure/acc.png" width=100%> <br>
-</p>
+### Reference Repo
+- [NLP implementation by aisolab](https://github.com/aisolab/nlp_implementation)
+- [pytorch-crf](https://github.com/kmkurn/pytorch-crf/blob/8f3203a1f1d7984c87718bfe31853242670258db/docs/index.rst)
+- [SKTBrain KoBERT](https://github.com/SKTBrain/KoBERT)
+- [Finetuning configuration from huggingface](https://github.com/huggingface/pytorch-transformers/blob/master/examples/run_multiple_choice.py)
+- [BERT Attention Visualization](https://github.com/jessevig/bertviz)
 
-### validation loss 
-<p align="center">
-  <img src="/figure/loss.png" width=100%> <br>
-</p>
-
-### Confusion Matrix 
-<p align="center">
-  <img src="/figure/confusion matrix.png" width=100%> <br>
-</p>
-
+- 
