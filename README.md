@@ -135,3 +135,4 @@ class KobertCRF(nn.Module):
 - [SKTBrain KoBERT](https://github.com/SKTBrain/KoBERT)
 - [Finetuning configuration from huggingface](https://github.com/huggingface/pytorch-transformers/blob/master/examples/run_multiple_choice.py)
 - [SKTBrain KoBERT Error revise](https://github.com/SKTBrain/KoBERT/tree/master/kobert_hf)
+- [FRU-Adapter](https://github.com/SeoulTech-HCIRLab/FRU-Adapter)
