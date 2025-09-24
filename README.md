@@ -50,55 +50,81 @@ python train_bert_crf.py
 </p>
 
 ```
-#Frame recalibration unit adapter
-class FRU_Adapter(nn.Module):
-    def __init__(self,
-                 channel = 197,
-                 embded_dim = 1024,
-                 Frame = 16,
-                 hidden_dim = 128):
-        super().__init__()
+#KobertCRF + FRU-Adapter
+class KobertCRF(nn.Module):
+    """ KoBERT with CRF FRU-Adapter"""
+    def __init__(self, config, num_classes, vocab=None) -> None:
+        super(KobertCRF, self).__init__()
 
-        self.Frame = Frame
+        if vocab is None:
+            self.bert, self.vocab = get_pytorch_kobert_model()
+        else:
+            self.bert = BertModel(config=BertConfig.from_dict(bert_config))
+            self.vocab = vocab
 
-        self.linear1 = nn.Linear(embded_dim ,hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim,embded_dim)
+        self.dropout = nn.Dropout(config.dropout)
+        self.position_wise_ff = nn.Linear(config.hidden_size, num_classes)
+        self.crf = CRF(num_labels=num_classes)
+        self.pad_id = getattr(config, "pad_id", 1)  # 기본 1
 
-        self.T_linear1 = nn.Linear(Frame, Frame)
-        self.softmax = nn.Softmax(dim=1)
-        self.ln = nn.LayerNorm(hidden_dim)
+        self.tsea_blocks = nn.ModuleList([
+            FRU_Adapter(embded_dim=768) for _ in range(12)
+        ])
+
+        # head_mask = [None] * self.bert.config.num_hidden_layers
+
+        for param in self.bert.encoder.parameters():
+           param.requires_grad = False
+
+
+
+    def forward(self, input_ids, token_type_ids=None, tags=None):
+        attention_mask = input_ids.ne(self.vocab.token_to_idx[self.vocab.padding_token]).float() # B, 30
+
+        attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+        #outputs: (last_encoder_layer, pooled_output, attention_weight) 
+        # for i, layer_module in enumerate(self.bert.encoder.layer):
+        hidden_states  = self.bert.embeddings(input_ids=input_ids, token_type_ids=token_type_ids) # B 30 768
+        # head_mask = [None] * self.bert.config.num_hidden_layers
         
-        self.TFormer = TemporalTransformer(frame=Frame,emb_dim=hidden_dim)
+        for i, blk in enumerate(self.bert.encoder.layer):
+            # layer 출력 가져오기 (버전에 따라 tuple일 수 있음)
+            # hidden_states,token_type_ids,attention_mask = blk(hidden_states,token_type_ids,attention_mask) #+ self.tsea_blocks[i](hidden_states)
+            # hidden_states = blk(hidden_states)
+            hidden_states = blk(hidden_states,attention_mask)#,head_mask[i])
+            hidden_states = hidden_states[0] if isinstance(hidden_states, (tuple, list)) else hidden_states
+            hidden_states = hidden_states + self.tsea_blocks[i](hidden_states)
+        
+        last_encoder_layer = hidden_states #outputs[0]
+        last_encoder_layer = self.dropout(last_encoder_layer)
+        emissions = self.position_wise_ff(last_encoder_layer)
+        mask = input_ids.ne(self.pad_id)   # dtype=bool
+        max_len = input_ids.size(1)
+        pad_val = self.pad_id  # = 1
 
-    #Frame recalibration unit
-    def FRU(self, x):
-        x1 = x.mean(-1).flatten(1) # bn t 
-        x1 = self.T_linear1(x1) # bn t
-        x1 = self.softmax(x1).unsqueeze(-1) #bn t 1
-        x = x * x1 #bn t d
-        return x 
-    
-    def forward(self, x):
-        #x = bt N D 
-        bt, n,d = x.shape
-        x = rearrange(x, '(b t) n d-> (b n) t d', t = self.Frame, n = n, d = d)
+        def _pad_paths(paths):
+            # paths: List[List[int]] (batch 크기)
+            out = []
+            for p in paths:
+                if len(p) < max_len:
+                    p = p + [pad_val] * (max_len - len(p))
+                out.append(p)
+            return torch.tensor(out, device=input_ids.device, dtype=torch.long)
 
-        x = self.linear1(x) # bn t d
-        x = self.ln(x) 
-
-        _, _,down = x.shape
-
-        x = rearrange(x, '(b n) t d-> b t (n d)', t = self.Frame, n = n, d = down)
-        x = self.FRU(x)
-        x = rearrange(x, 'b t (n d)-> (b n) t d', t = self.Frame, n = n, d = down)
-
-        x = self.TFormer(x)
-        x = self.linear2(x) # bn t d
-        #bt n d
-        x = rearrange(x, '(b n) t d-> (b t) n d', t = self.Frame, n = n, d = d)
-        return x
+        if tags is not None:
+            # log_likelihood, sequence_of_tags = self.crf(emissions, tags), self.crf.decode(emissions)
+            # sequence_of_tags = self.crf.decode(emissions, mask=mask)
+            log_likelihood = self.crf(emissions, tags, mask=mask)
+            sequence_of_tags = self.crf.viterbi_decode(emissions, mask=mask)
+            sequence_of_tags = _pad_paths(sequence_of_tags) #---
+            return log_likelihood, sequence_of_tags
+        else:
+            sequence_of_tags = self.crf.viterbi_decode(emissions, mask=mask)
+            sequence_of_tags = _pad_paths(sequence_of_tags) #---
+            return sequence_of_tags
 ```
-[models_vit.py](models_vit.py)
+[model/net.py](model/net.py)
 
 - Benchmark (NER Dataset)
 
