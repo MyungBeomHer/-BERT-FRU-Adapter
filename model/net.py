@@ -181,8 +181,7 @@ class KobertCRF(nn.Module):
 
         # head_mask = [None] * self.bert.config.num_hidden_layers
 
-        for param in self.bert.encoder.parameters():
-           param.requires_grad = False
+       
 
 
 
