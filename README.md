@@ -129,8 +129,10 @@ class KobertCRF(nn.Module):
 |Model|Params|MacroAvg F1 score|
 |:------:|:------:|:---:|
 |KoBERT|92.21M|0.8554|
+|KoBERT+CRF|92.21M|0.8756||
 |KoBERT+BiLSTM+CRF|95.75M|0.8659||
-|**KoBERT+FRU-Adapter+CRF**|95.38M|**0.8703**||
+|KoBERT+Temporal-Adapter+CRF|95.38M|0.8623||
+|**KoBERT+FRU-Adapter+CRF**|95.38M|**0.8769**||
 
 ### Reference Repo
 - [SKTBrain KoBERT](https://github.com/SKTBrain/KoBERT)
