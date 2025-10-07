@@ -5,7 +5,8 @@ import argparse
 import torch
 from kobert.pytorch_kobert import get_pytorch_kobert_model
 from kobert.utils import get_tokenizer
-from model.net import KobertSequenceFeatureExtractor, KobertCRF, KobertBiLSTMCRF, KobertBiGRUCRF
+# from model.net import KobertSequenceFeatureExtractor, KobertCRF, KobertBiLSTMCRF, KobertBiGRUCRF
+from model.net import KobertCRF
 from gluonnlp.data import SentencepieceTokenizer
 from data_utils.utils import Config
 from data_utils.vocab_tokenizer import Tokenizer
@@ -35,20 +36,13 @@ def main(parser):
         index_to_ner = {v: k for k, v in ner_to_index.items()}
 
     # Model
-    # model = KobertSequenceFeatureExtractor(config=model_config, num_classes=len(ner_to_index))
     model = KobertCRF(config=model_config, num_classes=len(ner_to_index), vocab=vocab)
-    # model = KobertBiLSTMCRF(config=model_config, num_classes=len(ner_to_index), vocab=vocab)
-    # model = KobertBiGRUCRF(config=model_config, num_classes=len(ner_to_index), vocab=vocab)
-
+    
     # load
     model_dict = model.state_dict()
-    # checkpoint = torch.load("./experiments/base_model/best-epoch-9-step-600-acc-0.845.bin", map_location=torch.device('cpu'))
-
-    # checkpoint = torch.load("./experiments/base_model_with_crf/best-epoch-16-step-1500-acc-0.993.bin", map_location=torch.device('cpu'))
-    checkpoint = torch.load("./experiments/base_model_with_crf_val/best-epoch-12-step-1000-acc-0.960.bin", map_location=torch.device('cpu'))
-    # checkpoint = torch.load("./experiments/base_model_with_bilstm_crf/best-epoch-15-step-2750-acc-0.992.bin", map_location=torch.device('cpu'))
-    # checkpoint = torch.load("./experiments/base_model_with_bigru_crf/model-epoch-18-step-3250-acc-0.997.bin", map_location=torch.device('cpu'))
-
+    
+    checkpoint = torch.load("./experiments/base_model_with_crf_val/best-epoch-12-step-1000-acc-0.958.bin", map_location=torch.device('cpu'))
+    
     convert_keys = {}
     for k, v in checkpoint['model_state_dict'].items():
         new_key_name = k.replace("module.", '')
@@ -58,35 +52,81 @@ def main(parser):
         convert_keys[new_key_name] = v
 
     model.load_state_dict(convert_keys)
-    model.eval()
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # model.eval()
+    # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    # n_gpu = torch.cuda.device_count()
-    # if n_gpu > 1:
-    #     model = torch.nn.DataParallel(model)
+    # # n_gpu = torch.cuda.device_count()
+    # # if n_gpu > 1:
+    # #     model = torch.nn.DataParallel(model)
+    # model.to(device)
+
+    # decoder_from_res = DecoderFromNamedEntitySequence(tokenizer=tokenizer, index_to_ner=index_to_ner)
+
+    # while(True):
+    #     input_text = input("문장을 입력하세요: ")
+    #     list_of_input_ids = tokenizer.list_of_string_to_list_of_cls_sep_token_ids([input_text])
+    #     x_input = torch.tensor(list_of_input_ids).long()
+
+    #     ## for bert alone
+    #     # y_pred = model(x_input)
+    #     # list_of_pred_ids = y_pred.max(dim=-1)[1].tolist()
+
+    #     ## for bert crf
+    #     list_of_pred_ids = model(x_input)
+
+    #     ## for bert bilstm crf & bert bigru crf
+    #     # list_of_pred_ids = model(x_input, using_pack_sequence=False)
+
+    #     list_of_ner_word, decoding_ner_sentence = decoder_from_res(list_of_input_ids=list_of_input_ids, list_of_pred_ids=list_of_pred_ids)
+    #     print("list_of_ner_word:", list_of_ner_word)
+    #     print("decoding_ner_sentence:", decoding_ner_sentence)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model.to(device)
+    model.eval()
+
+    pad_id = vocab.token_to_idx[vocab.padding_token]         # e.g., 1
+    MAXLEN = int(model_config.maxlen)                        # FRU가 30이면 여기도 30이어야 함
 
     decoder_from_res = DecoderFromNamedEntitySequence(tokenizer=tokenizer, index_to_ner=index_to_ner)
 
-    while(True):
+    while True:
         input_text = input("문장을 입력하세요: ")
-        list_of_input_ids = tokenizer.list_of_string_to_list_of_cls_sep_token_ids([input_text])
-        x_input = torch.tensor(list_of_input_ids).long()
 
-        ## for bert alone
-        # y_pred = model(x_input)
-        # list_of_pred_ids = y_pred.max(dim=-1)[1].tolist()
+        # 1) 토크나이즈(여기서 CLS/SEP까지 포함된 토큰 ID 리스트가 나옴)
+        list_of_input_ids = tokenizer.list_of_string_to_list_of_cls_sep_token_ids([input_text])  # [[...len=L...]]
 
-        ## for bert crf
-        list_of_pred_ids = model(x_input)
+        # 2) 반드시 길이를 MAXLEN으로 맞춘다(패딩/우측 자르기)
+        #    keras_pad_fn가 없다면 직접 구현해도 OK (아래 주석된 코드 참고)
+        list_of_input_ids = keras_pad_fn(list_of_input_ids, maxlen=MAXLEN, pad_id=pad_id)
+        # --- 직접 구현 예시 ---
+        # ids = list_of_input_ids[0]
+        # if len(ids) < MAXLEN:
+        #     ids = ids + [pad_id] * (MAXLEN - len(ids))
+        # else:
+        #     # 너무 길면 우측을 자르되, CLS(맨앞), SEP(마지막) 보존 규칙이 필요하면 여기서 처리
+        #     ids = ids[:MAXLEN]
+        # list_of_input_ids = [ids]
+        # -----------------------
 
-        ## for bert bilstm crf & bert bigru crf
-        # list_of_pred_ids = model(x_input, using_pack_sequence=False)
+        # 3) 텐서로 만들고 모델 디바이스로 이동
+        x_input = torch.tensor(list_of_input_ids).long().to(device)  # [B=1, L=MAXLEN]
 
-        list_of_ner_word, decoding_ner_sentence = decoder_from_res(list_of_input_ids=list_of_input_ids, list_of_pred_ids=list_of_pred_ids)
+        with torch.no_grad():
+            pred = model(x_input)   # CRF decode 결과
+
+        # 4) 디코더 편의상 list로 변환
+        if torch.is_tensor(pred):
+            list_of_pred_ids = pred.detach().cpu().tolist()
+        else:
+            list_of_pred_ids = pred
+
+        # 5) 후처리/출력
+        list_of_ner_word, decoding_ner_sentence = decoder_from_res(
+            list_of_input_ids=list_of_input_ids,
+            list_of_pred_ids=list_of_pred_ids
+        )
         print("list_of_ner_word:", list_of_ner_word)
         print("decoding_ner_sentence:", decoding_ner_sentence)
-
 
 class DecoderFromNamedEntitySequence():
     def __init__(self, tokenizer, index_to_ner):
