@@ -44,6 +44,12 @@ pip install -r requirements.txt
 python train_bert_crf.py 
 ```
 
+### inference
+```bash
+python inference.py 
+```
+
+
 ### Model
 <p align="center">
   <img src="/figure/model.png" width=100%> <br>
