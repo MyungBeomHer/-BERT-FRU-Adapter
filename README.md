@@ -71,54 +71,56 @@ class KobertCRF(nn.Module):
             FRU_Adapter(embded_dim=768) for _ in range(12)
         ])
 
-        # head_mask = [None] * self.bert.config.num_hidden_layers
-
-        
-
-
-
     def forward(self, input_ids, token_type_ids=None, tags=None):
-        attention_mask = input_ids.ne(self.vocab.token_to_idx[self.vocab.padding_token]).float() # B, 30
+        # --- 1) BERT attention mask (2D -> extended additive mask) ---
+        pad = self.vocab.token_to_idx[self.vocab.padding_token]
+        mask_2d = input_ids.ne(pad).to(dtype=self.bert.embeddings.word_embeddings.weight.dtype)  # [B, L]
+        extended_attention_mask = self.bert.get_extended_attention_mask(
+            mask_2d, mask_2d.shape, device=input_ids.device
+        )  # [B,1,1,L], tokens: 0.0, pads: -10000.0
 
-        attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        # --- 2) 임베딩 + (동결된) 인코더 + FRU 병렬잔차 ---
+        hidden_states = self.bert.embeddings(input_ids=input_ids, token_type_ids=token_type_ids)  # [B,L,768]
 
-        #outputs: (last_encoder_layer, pooled_output, attention_weight) 
-        # for i, layer_module in enumerate(self.bert.encoder.layer):
-        hidden_states  = self.bert.embeddings(input_ids=input_ids, token_type_ids=token_type_ids) # B 30 768
-        # head_mask = [None] * self.bert.config.num_hidden_layers
-        
-        for i, blk in enumerate(self.bert.encoder.layer):
-            hidden_states = blk(hidden_states,attention_mask)#,head_mask[i])
-            hidden_states = hidden_states[0] if isinstance(hidden_states, (tuple, list)) else hidden_states
-            hidden_states = hidden_states + self.tsea_blocks[i](hidden_states)
-        
-        last_encoder_layer = hidden_states #outputs[0]
-        last_encoder_layer = self.dropout(last_encoder_layer)
-        emissions = self.position_wise_ff(last_encoder_layer)
-        mask = input_ids.ne(self.pad_id)   # dtype=bool
-        max_len = input_ids.size(1)
-        pad_val = self.pad_id  # = 1
+        for i, encoder_layer in enumerate(self.bert.encoder.layer):
+            prev = hidden_states
+            out = encoder_layer(hidden_states=hidden_states, attention_mask=extended_attention_mask)
+            x = out[0] if isinstance(out, (tuple, list)) else out
+            x = x + self.tsea_blocks[i](prev)  # FRU Adapter
+            # x = x + self.tsea_blocks[i](x)  # FRU Adapter
+            hidden_states = x
 
-        def _pad_paths(paths):
-            # paths: List[List[int]] (batch 크기)
+        last_encoder_layer = self.dropout(hidden_states)
+        emissions = self.position_wise_ff(last_encoder_layer)  # [B,L,num_classes]
+
+        # --- 3) CRF용 mask (bool, [B,L]) ---
+        crf_mask = input_ids.ne(self.pad_id)  # True=유효토큰, False=패딩
+    
+        max_len = input_ids.size(1)   # y_real과 동일한 목표 길이
+        pad_val = self.pad_id         # 패딩값 (어차피 acc 계산에서 pad는 마스크됨)
+
+        def _pad_paths(paths, tgt_len, pad_val):
             out = []
             for p in paths:
-                if len(p) < max_len:
-                    p = p + [pad_val] * (max_len - len(p))
+                if len(p) < tgt_len:
+                    p = p + [pad_val] * (tgt_len - len(p))
+                else:
+                    p = p[:tgt_len]
                 out.append(p)
-            return torch.tensor(out, device=input_ids.device, dtype=torch.long)
+            return out
 
         if tags is not None:
-            # log_likelihood, sequence_of_tags = self.crf(emissions, tags), self.crf.decode(emissions)
-            # sequence_of_tags = self.crf.decode(emissions, mask=mask)
-            log_likelihood = self.crf(emissions, tags, mask=mask)
-            sequence_of_tags = self.crf.viterbi_decode(emissions, mask=mask)
-            sequence_of_tags = _pad_paths(sequence_of_tags) #---
+            log_likelihood = self.crf(emissions, tags, mask=crf_mask.to(torch.uint8))
+            seq = self.crf.viterbi_decode(emissions, mask=crf_mask.to(torch.uint8))
+            seq = _pad_paths(seq, max_len, pad_val)                       # ★ 패딩
+            sequence_of_tags = torch.tensor(seq, device=input_ids.device) # 텐서로 변환
             return log_likelihood, sequence_of_tags
         else:
-            sequence_of_tags = self.crf.viterbi_decode(emissions, mask=mask)
-            sequence_of_tags = _pad_paths(sequence_of_tags) #---
+            seq = self.crf.viterbi_decode(emissions, mask=crf_mask.to(torch.uint8))
+            seq = _pad_paths(seq, max_len, pad_val)                       # ★ 패딩
+            sequence_of_tags = torch.tensor(seq, device=input_ids.device)
             return sequence_of_tags
+
 ```
 [model/net.py](model/net.py)
 
