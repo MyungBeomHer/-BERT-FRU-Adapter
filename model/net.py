@@ -120,18 +120,6 @@ class KobertCRF(nn.Module):
             FRU_Adapter(embded_dim=768) for _ in range(12)
         ])
 
-        # head_mask = [None] * self.bert.config.num_hidden_layers
-
-        # for param in self.bert.encoder.parameters():
-        #    param.requires_grad = False
-        # for p in self.bert.embeddings.parameters():
-        #     p.requires_grad = False
-
-        # for i, layer in enumerate(self.bert.encoder.layer):
-        #     for name, param in layer.named_parameters():
-        #         if "LayerNorm" in name:
-        #             param.requires_grad = True  # 나머지는 False 유지
-
     def forward(self, input_ids, token_type_ids=None, tags=None):
         # --- 1) BERT attention mask (2D -> extended additive mask) ---
         pad = self.vocab.token_to_idx[self.vocab.padding_token]
