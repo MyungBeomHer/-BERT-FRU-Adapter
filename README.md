@@ -1,4 +1,4 @@
-## AI based korean Named Entity Recognizer
+## AI based korean Named Entity Recognizer (KoBERT + FRU-Adapter)
 
 팀원 : [허명범](https://github.com/MyungBeomHer)
 
