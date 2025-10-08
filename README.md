@@ -146,3 +146,19 @@ class KobertCRF(nn.Module):
 - [SKTBrain KoBERT Error revise](https://github.com/SKTBrain/KoBERT/tree/master/kobert_hf)
 - [KoBERT using NER](https://github.com/eagle705/pytorch-bert-crf-ner/tree/master?tab=readme-ov-file)
 - [FRU-Adapter](https://github.com/SeoulTech-HCIRLab/FRU-Adapter)
+
+## ✏️ Citation
+
+If you think this project is helpful, please feel free to leave a star⭐️ and cite our paper:
+```bash
+@article{her2025fru,
+  title={FRU-Adapter: Frame Recalibration Unit Adapter for Dynamic Facial Expression Recognition},
+  author={Her, Myungbeom and Nabi, Hamza Ghulam and Han, Ji-Hyeong},
+  journal={Electronics},
+  volume={14},
+  number={5},
+  pages={978},
+  year={2025},
+  publisher={MDPI}
+}
+```
