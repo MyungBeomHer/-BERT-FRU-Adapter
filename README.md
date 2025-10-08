@@ -52,7 +52,7 @@ python inference.py
 
 ### Model
 <p align="center">
-  <img src="/figure/model.png" width=100%> <br>
+  <img src="/figure/model.png" width=50%> <br>
 </p>
 
 ```
